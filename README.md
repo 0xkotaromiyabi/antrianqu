@@ -9,7 +9,7 @@ AntrianQu adalah aplikasi manajemen antrean modern yang dirancang untuk efisiens
 - **Admin Dashboard**: Panel kontrol untuk memantau dan mengelola status antrean (Waiting, Arrived, Cancelled).
 - **Keamanan JWT**: Autentikasi berbasis token untuk akses administrator.
 - **Manajemen Super Admin**: Fitur untuk menambah/menghapus admin dan reset password melalui menu Settings.
-- **Database Prisma & PostgreSQL**: Penyimpanan data yang tangguh dan terukur.
+- **Database Prisma & PostgreSQL**: Database
 
 ## Teknologi
 
