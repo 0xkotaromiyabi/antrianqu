@@ -244,7 +244,7 @@ app.delete('/api/admins/:id', authenticateToken, requireSuperAdmin, async (req, 
 })
 
 // Seed merchants and admin (Initialization)
-app.post('/api/seed', async (req, res) => {
+app.get('/api/seed', async (req, res) => {
     const defaultMerchants = [
         'Boutique Senopati',
         'Merchant Kemang',
