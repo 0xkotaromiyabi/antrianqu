@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=antrian_user
+      - POSTGRES_PASSWORD=antrian_pass
+      - POSTGRES_DB=antrian_db
+    ports:
+      - '5435:5432'
+    volumes:
+      - ./postgres_data_antrian:/var/lib/postgresql/data

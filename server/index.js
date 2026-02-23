@@ -1,0 +1,290 @@
+import express from 'express'
+import cors from 'cors'
+import { PrismaClient } from '@prisma/client'
+import dotenv from 'dotenv'
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
+
+dotenv.config()
+
+const prisma = new PrismaClient()
+const app = express()
+
+app.use(cors())
+app.use(express.json())
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
+
+// Middleware to verify JWT
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(' ')[1]
+
+    if (!token) return res.status(401).json({ error: 'Akses ditolak. Token tidak ditemukan.' })
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: 'Token tidak valid.' })
+        req.user = user
+        next()
+    })
+}
+
+// Middleware to verify Super Admin role
+const requireSuperAdmin = (req, res, next) => {
+    if (req.user && req.user.role === 'SUPER_ADMIN') {
+        next()
+    } else {
+        res.status(403).json({ error: 'Akses ditolak. Fitur ini hanya untuk Super Admin.' })
+    }
+}
+
+// Authentication Endpoint
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body
+
+    try {
+        const admin = await prisma.admin.findUnique({
+            where: { username }
+        })
+
+        if (!admin) {
+            return res.status(401).json({ error: 'Username atau password salah.' })
+        }
+
+        const validPassword = await bcrypt.compare(password, admin.password)
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Username atau password salah.' })
+        }
+
+        const token = jwt.sign(
+            { id: admin.id, username: admin.username, role: admin.role },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        )
+        res.json({ token, username: admin.username, role: admin.role })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Get all merchants
+app.get('/api/merchants', async (req, res) => {
+    try {
+        const merchants = await prisma.merchant.findMany()
+        res.json(merchants)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Register a new queue
+app.post('/api/register', async (req, res) => {
+    const { name, email, phone, merchantId, date } = req.body
+
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Get current count for this merchant and date
+            const count = await tx.registration.count({
+                where: {
+                    merchantId: parseInt(merchantId),
+                    date: date
+                }
+            })
+
+            const rawNumber = count + 1
+            const formattedNumber = `A-${rawNumber.toString().padStart(3, '0')}`
+
+            // Calculate estimated time (Start at 09:00, 15 mins per person)
+            const baseMinutes = 9 * 60 + (rawNumber - 1) * 15
+            const hours = Math.floor(baseMinutes / 60)
+            const minutes = baseMinutes % 60
+            const timeSlot = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+
+            // 2. Create the registration
+            const registration = await tx.registration.create({
+                data: {
+                    name,
+                    email,
+                    phone,
+                    merchantId: parseInt(merchantId),
+                    date,
+                    queueNumber: formattedNumber,
+                    rawNumber,
+                    timeSlot,
+                },
+                include: {
+                    merchant: true
+                }
+            })
+
+            return registration
+        })
+
+        res.status(201).json(result)
+    } catch (error) {
+        console.error('Registration error:', error)
+        res.status(500).json({ error: 'Gagal melakukan pendaftaran. Silakan coba lagi.' })
+    }
+})
+
+// Get registrations (with optional merchant filtering) - PROTECTED
+app.get('/api/registrations', authenticateToken, async (req, res) => {
+    const { merchantId, date } = req.query
+
+    try {
+        const where = {}
+        if (merchantId) where.merchantId = parseInt(merchantId)
+        if (date) where.date = date
+
+        const registrations = await prisma.registration.findMany({
+            where,
+            include: {
+                merchant: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        })
+        res.json(registrations)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Update registration status - PROTECTED
+app.patch('/api/registrations/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params
+    const { status } = req.body
+
+    try {
+        const updated = await prisma.registration.update({
+            where: { id: parseInt(id) },
+            data: { status }
+        })
+        res.json(updated)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Delete registration - PROTECTED
+app.delete('/api/registrations/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params
+    try {
+        await prisma.registration.delete({
+            where: { id: parseInt(id) }
+        })
+        res.json({ success: true })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// --- ADMIN MANAGEMENT ENDPOINTS (SUPER ADMIN ONLY) ---
+
+// Get all admins
+app.get('/api/admins', authenticateToken, requireSuperAdmin, async (req, res) => {
+    try {
+        const admins = await prisma.admin.findMany({
+            select: { id: true, username: true, role: true }
+        })
+        res.json(admins)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Create new admin
+app.post('/api/admins', authenticateToken, requireSuperAdmin, async (req, res) => {
+    const { username, password, role } = req.body
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10)
+        const newAdmin = await prisma.admin.create({
+            data: {
+                username,
+                password: hashedPassword,
+                role: role || 'ADMIN'
+            }
+        })
+        res.status(201).json({ id: newAdmin.id, username: newAdmin.username, role: newAdmin.role })
+    } catch (error) {
+        res.status(400).json({ error: 'Username sudah digunakan atau data tidak valid.' })
+    }
+})
+
+// Reset admin password
+app.patch('/api/admins/:id/reset-password', authenticateToken, requireSuperAdmin, async (req, res) => {
+    const { id } = req.params
+    const { newPassword } = req.body
+    try {
+        const hashedPassword = await bcrypt.hash(newPassword, 10)
+        await prisma.admin.update({
+            where: { id: parseInt(id) },
+            data: { password: hashedPassword }
+        })
+        res.json({ message: 'Password berhasil direset.' })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Delete admin
+app.delete('/api/admins/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+    const { id } = req.params
+    try {
+        await prisma.admin.delete({
+            where: { id: parseInt(id) }
+        })
+        res.json({ success: true })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Seed merchants and admin (Initialization)
+app.post('/api/seed', async (req, res) => {
+    const defaultMerchants = [
+        'Boutique Senopati',
+        'Merchant Kemang',
+        'Store Menteng',
+        'Flagship PIK'
+    ]
+
+    try {
+        // 1. Seed Merchants
+        const createdMerchants = []
+        for (const name of defaultMerchants) {
+            const m = await prisma.merchant.upsert({
+                where: { name },
+                update: {},
+                create: { name }
+            })
+            createdMerchants.push(m)
+        }
+
+        // 2. Seed Default Super Admin
+        const hashedPassword = await bcrypt.hash('admin123', 10)
+        const admin = await prisma.admin.upsert({
+            where: { username: 'admin' },
+            update: { role: 'SUPER_ADMIN' }, // Ensure existing admin becomes super
+            create: {
+                username: 'admin',
+                password: hashedPassword,
+                role: 'SUPER_ADMIN'
+            }
+        })
+
+        res.json({
+            message: 'Seeding successful',
+            merchants: createdMerchants,
+            admin: { username: admin.username, note: 'Default password is admin123' }
+        })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+const PORT = process.env.PORT || 5000
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`)
+})
