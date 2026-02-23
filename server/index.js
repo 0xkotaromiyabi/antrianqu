@@ -7,7 +7,9 @@ import bcrypt from 'bcryptjs'
 
 dotenv.config()
 
-const prisma = new PrismaClient()
+// PrismaClient for Serverless
+const prisma = globalThis.prisma || new PrismaClient()
+if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
 const app = express()
 
 app.use(cors())
