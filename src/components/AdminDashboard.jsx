@@ -63,7 +63,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
 
     const fetchAdmins = async () => {
         try {
-            const res = await fetch('http://localhost:5000/api/admins', {
+            const res = await fetch('/api/admins', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const data = await res.json()
@@ -76,7 +76,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
     const handleAddAdmin = async (e) => {
         e.preventDefault()
         try {
-            const res = await fetch('http://localhost:5000/api/admins', {
+            const res = await fetch('/api/admins', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
