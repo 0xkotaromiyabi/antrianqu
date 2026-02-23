@@ -1,6 +1,6 @@
 # AntrianQu - Sistem Antrean Terpadu
 
-AntrianQu adalah aplikasi manajemen antrean modern yang dirancang untuk efisiensi dan kemudahan penggunaan. Dilengkapi dengan Dashboard ERP untuk administrator dan fitur Super Admin untuk manajemen role.
+AntrianQu adalah aplikasi manajemen antrean modern yang dirancang untuk efisiensi dan kemudahan penggunaan. Dilengkapi dengan Dashboard untuk administrator dan fitur Super Admin untuk manajemen role.
 
 ## Fitur Utama
 
