@@ -28,7 +28,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
 
     const fetchMerchants = async () => {
         try {
-            const res = await fetch('http://localhost:5000/api/merchants', {
+            const res = await fetch('/api/merchants', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const data = await res.json()
@@ -40,7 +40,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
 
     const fetchRegistrations = async () => {
         try {
-            const res = await fetch('http://localhost:5000/api/registrations', {
+            const res = await fetch('/api/registrations', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const data = await res.json()
@@ -97,7 +97,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
     const handleDeleteAdmin = async (id) => {
         if (!window.confirm('Hapus akun admin ini?')) return
         try {
-            const res = await fetch(`http://localhost:5000/api/admins/${id}`, {
+            const res = await fetch(`/api/admins/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -113,7 +113,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
         if (!newPassword) return
 
         try {
-            const res = await fetch(`http://localhost:5000/api/admins/${id}/reset-password`, {
+            const res = await fetch(`/api/admins/${id}/reset-password`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
     const handleDelete = async (id) => {
         if (window.confirm('Hapus pendaftaran ini?')) {
             try {
-                await fetch(`http://localhost:5000/api/registrations/${id}`, {
+                await fetch(`/api/registrations/${id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
@@ -144,7 +144,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
 
     const updateStatus = async (id, newStatus) => {
         try {
-            await fetch(`http://localhost:5000/api/registrations/${id}`, {
+            await fetch(`/api/registrations/${id}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

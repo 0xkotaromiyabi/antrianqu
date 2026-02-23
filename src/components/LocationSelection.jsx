@@ -10,7 +10,7 @@ const LocationSelection = ({ onComplete }) => {
     useEffect(() => {
         const fetchMerchants = async () => {
             try {
-                const res = await fetch('http://localhost:5000/api/merchants')
+                const res = await fetch('/api/merchants')
                 const data = await res.json()
                 setMerchants(data)
             } catch (error) {
