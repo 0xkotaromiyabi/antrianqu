@@ -12,6 +12,18 @@ const prisma = globalThis.prisma || new PrismaClient()
 if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
 const app = express()
 
+// In-memory bot state for real-time monitoring (Ticket War Console)
+let botState = {
+    jobCounter: 0,
+    proxyStatus: 'Checking...',
+    proxies: [], // { ip: string, status: 'live' | 'dead', latency: number }
+    browserState: 'Disconnected',
+    lastUpdate: null,
+    isTargetLive: false,
+    activeTasks: [],
+    logs: []
+}
+
 app.use(cors())
 app.use(express.json())
 
@@ -364,6 +376,34 @@ app.get('/api/seed', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message })
     }
+})
+
+// --- BOT MONITORING ENDPOINTS (TICKET WAR) ---
+
+// Get current bot status
+app.get('/api/bot/status', async (req, res) => {
+    res.json(botState)
+})
+
+// Update bot status (called by monitor/bot scripts)
+app.post('/api/bot/update', async (req, res) => {
+    const data = req.body
+
+    botState = {
+        ...botState,
+        ...data,
+        lastUpdate: new Date().toISOString()
+    }
+
+    // Keep logs manageable (last 50)
+    if (data.log) {
+        botState.logs = [
+            { time: new Date().toISOString(), message: data.log },
+            ...botState.logs
+        ].slice(0, 50)
+    }
+
+    res.json({ success: true })
 })
 
 const PORT = process.env.PORT || 5000

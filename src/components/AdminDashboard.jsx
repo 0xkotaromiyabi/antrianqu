@@ -13,7 +13,13 @@ import {
     Clock,
     CheckCircle,
     XCircle,
-    Loader2
+    Loader2,
+    Activity,
+    Terminal,
+    Globe,
+    Cpu,
+    Wifi,
+    Zap
 } from 'lucide-react'
 
 const AdminDashboard = ({ onBack, token, role, onLogout }) => {
@@ -25,6 +31,15 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
     const [allAdmins, setAllAdmins] = useState([]) // For Super Admin management
     const [adminForm, setAdminForm] = useState({ username: '', password: '', role: 'ADMIN' })
     const [isAddingAdmin, setIsAddingAdmin] = useState(false)
+    const [botData, setBotData] = useState({
+        jobCounter: 0,
+        proxyStatus: 'Offline',
+        proxies: [],
+        browserState: 'Disconnected',
+        lastUpdate: null,
+        isTargetLive: false,
+        logs: []
+    })
 
     const fetchMerchants = async () => {
         try {
@@ -59,7 +74,21 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
             setLoading(false)
         }
         init()
+
+        // Real-time Bot Status Polling
+        const botInterval = setInterval(fetchBotStatus, 3000)
+        return () => clearInterval(botInterval)
     }, [role])
+
+    const fetchBotStatus = async () => {
+        try {
+            const res = await fetch('/api/bot/status')
+            const data = await res.json()
+            setBotData(data)
+        } catch (error) {
+            console.error('Error fetching bot status:', error)
+        }
+    }
 
     const fetchAdmins = async () => {
         try {
@@ -156,6 +185,98 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
         } catch (error) {
             alert('Gagal mengupdate status')
         }
+    }
+
+    const renderBotMonitor = () => {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Status Stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+                    <div className="erp-card" style={{ borderLeft: '4px solid var(--primary-color)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)' }}>JOB ACTIONS</p>
+                            <Zap size={14} color="var(--primary-color)" />
+                        </div>
+                        <p style={{ fontSize: '32px', fontWeight: '900', color: '#fff' }}>{botData.jobCounter}</p>
+                        <p style={{ fontSize: '10px', color: '#22c55e' }}>Polling active (3s)</p>
+                    </div>
+                    <div className="erp-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)' }}>PROXY POOL</p>
+                            <Wifi size={14} color="#3b82f6" />
+                        </div>
+                        <p style={{ fontSize: '32px', fontWeight: '900', color: '#fff' }}>{botData.proxies.length}</p>
+                        <p style={{ fontSize: '10px', color: botData.proxyStatus === 'Online' ? '#22c55e' : '#999' }}>{botData.proxyStatus}</p>
+                    </div>
+                    <div className="erp-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)' }}>BROWSER ENGINE</p>
+                            <Cpu size={14} color="#f59e0b" />
+                        </div>
+                        <p style={{ fontSize: '20px', fontWeight: '900', color: '#fff', marginTop: '10px' }}>{botData.browserState}</p>
+                        <p style={{ fontSize: '10px', color: 'var(--text-color)' }}>Puppeteer Stealth Core</p>
+                    </div>
+                    <div className="erp-card" style={{ borderLeft: botData.isTargetLive ? '4px solid #22c55e' : '4px solid #ef4444' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)' }}>TARGET STATUS</p>
+                            <Globe size={14} color={botData.isTargetLive ? '#22c55e' : '#ef4444'} />
+                        </div>
+                        <p style={{ fontSize: '20px', fontWeight: '900', color: '#fff', marginTop: '10px' }}>
+                            {botData.isTargetLive ? 'FORM LIVE' : 'WAITING...'}
+                        </p>
+                        <p style={{ fontSize: '10px', color: 'var(--text-color)' }}>Scan logic: #name</p>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+                    {/* Live Console Logs */}
+                    <div className="erp-card" style={{ background: '#0a0a0a', border: '1px solid #222' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Terminal size={14} /> LIVE WAR LOGS
+                            </h3>
+                            <div style={{ width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%', boxShadow: '0 0 10px #22c55e' }} />
+                        </div>
+                        <div style={{
+                            height: '300px',
+                            overflowY: 'auto',
+                            fontFamily: 'monospace',
+                            fontSize: '11px',
+                            color: '#10b981',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            padding: '10px',
+                            background: '#050505',
+                            borderRadius: '8px'
+                        }}>
+                            {botData.logs && botData.logs.length > 0 ? botData.logs.map((log, i) => (
+                                <div key={i}>
+                                    <span style={{ color: '#666' }}>[{new Date(log.time).toLocaleTimeString()}]</span> {log.message}
+                                </div>
+                            )) : (
+                                <div style={{ color: '#444' }}>Awaiting bot telemetry...</div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Proxy Details */}
+                    <div className="erp-card">
+                        <h3 style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '15px' }}>PROXY HEALTH</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {botData.proxies && botData.proxies.length > 0 ? botData.proxies.map((p, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
+                                    <span style={{ fontSize: '11px', color: '#fff' }}>{p.ip}</span>
+                                    <span style={{ fontSize: '10px', color: p.status === 'live' ? '#22c55e' : '#ef4444' }}>{p.latency}ms</span>
+                                </div>
+                            )) : (
+                                <p style={{ fontSize: '11px', color: 'var(--text-color)', textAlign: 'center', padding: '20px' }}>No proxies registered</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     const getFilteredData = () => {
@@ -375,111 +496,112 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
                 </div>
 
                 {activeMenu === 'overview' ? renderOverview() :
-                    activeMenu === 'settings' ? renderSettings() : (
-                        <>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                                <div className="erp-card">
-                                    <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '10px' }}>TOTAL ANTRIAN</p>
-                                    <p style={{ fontSize: '32px', fontWeight: '900', color: '#fff' }}>{stats.total}</p>
+                    activeMenu === 'bot' ? renderBotMonitor() :
+                        activeMenu === 'settings' ? renderSettings() : (
+                            <>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+                                    <div className="erp-card">
+                                        <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '10px' }}>TOTAL ANTRIAN</p>
+                                        <p style={{ fontSize: '32px', fontWeight: '900', color: '#fff' }}>{stats.total}</p>
+                                    </div>
+                                    <div className="erp-card">
+                                        <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '10px' }}>MENUNGGU</p>
+                                        <p style={{ fontSize: '32px', fontWeight: '900', color: '#f59e0b' }}>{stats.waiting}</p>
+                                    </div>
+                                    <div className="erp-card">
+                                        <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '10px' }}>SUDAH TIBA</p>
+                                        <p style={{ fontSize: '32px', fontWeight: '900', color: '#10b981' }}>{stats.arrived}</p>
+                                    </div>
                                 </div>
-                                <div className="erp-card">
-                                    <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '10px' }}>MENUNGGU</p>
-                                    <p style={{ fontSize: '32px', fontWeight: '900', color: '#f59e0b' }}>{stats.waiting}</p>
-                                </div>
-                                <div className="erp-card">
-                                    <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-color)', marginBottom: '10px' }}>SUDAH TIBA</p>
-                                    <p style={{ fontSize: '32px', fontWeight: '900', color: '#10b981' }}>{stats.arrived}</p>
-                                </div>
-                            </div>
 
-                            <div className="form__input-wrapper" style={{ height: '45px', marginTop: 0, marginBottom: '20px', maxWidth: '400px' }}>
-                                <input
-                                    className="form__input"
-                                    style={{ height: '45px' }}
-                                    placeholder="Search registrations..."
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                                <div className="form__input-icon">
-                                    <Search size={18} />
+                                <div className="form__input-wrapper" style={{ height: '45px', marginTop: 0, marginBottom: '20px', maxWidth: '400px' }}>
+                                    <input
+                                        className="form__input"
+                                        style={{ height: '45px' }}
+                                        placeholder="Search registrations..."
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                    <div className="form__input-icon">
+                                        <Search size={18} />
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="erp-card" style={{ padding: 0, overflow: 'hidden' }}>
-                                <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                                        <thead>
-                                            <tr style={{ background: '#121212' }}>
-                                                <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>TICKET info</th>
-                                                <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>CUSTOMER</th>
-                                                <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>SCHEDULE</th>
-                                                <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>STATUS</th>
-                                                <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700', textAlign: 'right' }}>ACTIONS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filtered.map((reg) => (
-                                                <tr key={reg.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                                    <td style={{ padding: '18px 20px' }}>
-                                                        <p style={{ fontWeight: '900', color: 'var(--primary-color)', fontSize: '16px' }}>{reg.queueNumber}</p>
-                                                    </td>
-                                                    <td style={{ padding: '18px 20px' }}>
-                                                        <p style={{ fontWeight: '700', color: '#fff' }}>{reg.name}</p>
-                                                        <p style={{ color: 'var(--text-color)', fontSize: '11px' }}>{reg.phone}</p>
-                                                    </td>
-                                                    <td style={{ padding: '18px 20px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                                            <MapPin size={12} color="var(--primary-color)" />
-                                                            <span style={{ color: '#fff' }}>{reg.merchant?.name}</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Clock size={12} color="var(--text-color)" />
-                                                            <span style={{ color: 'var(--text-color)' }}>{reg.timeSlot} WIB</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '18px 20px' }}>
-                                                        <span className={`badge badge-${reg.status}`}>
-                                                            {reg.status === 'waiting' ? 'Menunggu' : reg.status === 'arrived' ? 'Hadir' : 'Batal'}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '18px 20px', textAlign: 'right' }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                                            {reg.status === 'waiting' && (
-                                                                <button
-                                                                    onClick={() => updateStatus(reg.id, 'arrived')}
-                                                                    className="sign-in-with__option"
-                                                                    style={{ width: '32px', height: '32px', color: '#10b981', background: 'rgba(16,185,129,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                >
-                                                                    <CheckCircle size={16} />
-                                                                </button>
-                                                            )}
-                                                            {reg.status !== 'cancelled' && (
-                                                                <button
-                                                                    onClick={() => updateStatus(reg.id, 'cancelled')}
-                                                                    className="sign-in-with__option"
-                                                                    style={{ width: '32px', height: '32px', color: '#ef4444', background: 'rgba(239,68,68,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                                >
-                                                                    <XCircle size={16} />
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                onClick={() => handleDelete(reg.id)}
-                                                                className="sign-in-with__option"
-                                                                style={{ width: '32px', height: '32px', color: 'var(--text-color)', background: '#222', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
+                                <div className="erp-card" style={{ padding: 0, overflow: 'hidden' }}>
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                                            <thead>
+                                                <tr style={{ background: '#121212' }}>
+                                                    <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>TICKET info</th>
+                                                    <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>CUSTOMER</th>
+                                                    <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>SCHEDULE</th>
+                                                    <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700' }}>STATUS</th>
+                                                    <th style={{ padding: '18px 20px', color: 'var(--text-color)', fontWeight: '700', textAlign: 'right' }}>ACTIONS</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {filtered.map((reg) => (
+                                                    <tr key={reg.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                                        <td style={{ padding: '18px 20px' }}>
+                                                            <p style={{ fontWeight: '900', color: 'var(--primary-color)', fontSize: '16px' }}>{reg.queueNumber}</p>
+                                                        </td>
+                                                        <td style={{ padding: '18px 20px' }}>
+                                                            <p style={{ fontWeight: '700', color: '#fff' }}>{reg.name}</p>
+                                                            <p style={{ color: 'var(--text-color)', fontSize: '11px' }}>{reg.phone}</p>
+                                                        </td>
+                                                        <td style={{ padding: '18px 20px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                                                <MapPin size={12} color="var(--primary-color)" />
+                                                                <span style={{ color: '#fff' }}>{reg.merchant?.name}</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <Clock size={12} color="var(--text-color)" />
+                                                                <span style={{ color: 'var(--text-color)' }}>{reg.timeSlot} WIB</span>
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ padding: '18px 20px' }}>
+                                                            <span className={`badge badge-${reg.status}`}>
+                                                                {reg.status === 'waiting' ? 'Menunggu' : reg.status === 'arrived' ? 'Hadir' : 'Batal'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '18px 20px', textAlign: 'right' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                                                {reg.status === 'waiting' && (
+                                                                    <button
+                                                                        onClick={() => updateStatus(reg.id, 'arrived')}
+                                                                        className="sign-in-with__option"
+                                                                        style={{ width: '32px', height: '32px', color: '#10b981', background: 'rgba(16,185,129,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <CheckCircle size={16} />
+                                                                    </button>
+                                                                )}
+                                                                {reg.status !== 'cancelled' && (
+                                                                    <button
+                                                                        onClick={() => updateStatus(reg.id, 'cancelled')}
+                                                                        className="sign-in-with__option"
+                                                                        style={{ width: '32px', height: '32px', color: '#ef4444', background: 'rgba(239,68,68,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <XCircle size={16} />
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => handleDelete(reg.id)}
+                                                                    className="sign-in-with__option"
+                                                                    style={{ width: '32px', height: '32px', color: 'var(--text-color)', background: '#222', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
-                        </>
-                    )}
+                            </>
+                        )}
             </div>
         )
     }
@@ -521,6 +643,13 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
 
                     <p className="erp-nav-label">System</p>
                     <div
+                        className={`erp-nav-item ${activeMenu === 'bot' ? 'erp-nav-item--active' : ''}`}
+                        onClick={() => setActiveMenu('bot')}
+                        style={{ color: '#10b981' }}
+                    >
+                        <Activity size={18} /> Ticket War VIP
+                    </div>
+                    <div
                         className={`erp-nav-item ${activeMenu === 'settings' ? 'erp-nav-item--active' : ''}`}
                         onClick={() => setActiveMenu('settings')}
                     >
@@ -550,7 +679,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
 
                 {renderContent()}
             </main>
-        </div>
+        </div >
     )
 }
 
