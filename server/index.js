@@ -79,13 +79,60 @@ app.get('/api/merchants', async (req, res) => {
     }
 })
 
+// Get slots for a specific merchant and date
+app.get('/api/merchants/:id/slots', async (req, res) => {
+    const { id } = req.params
+    const { date } = req.query
+
+    try {
+        const slots = await prisma.timeSlot.findMany({
+            where: { merchantId: parseInt(id) },
+            include: {
+                registrations: {
+                    where: { date: date }
+                }
+            },
+            orderBy: { startTime: 'asc' }
+        })
+
+        // Map to include current registration count
+        const slotsWithStatus = slots.map(slot => ({
+            id: slot.id,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            maxQuota: slot.maxQuota,
+            currentCount: slot.registrations.length,
+            isAvailable: slot.registrations.length < slot.maxQuota
+        }))
+
+        res.json(slotsWithStatus)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
 // Register a new queue
 app.post('/api/register', async (req, res) => {
-    const { name, email, phone, merchantId, date } = req.body
+    const { name, email, phone, merchantId, slotId, date } = req.body
 
     try {
         const result = await prisma.$transaction(async (tx) => {
-            // 1. Get current count for this merchant and date
+            // 1. Validate slot availability
+            const slot = await tx.timeSlot.findUnique({
+                where: { id: parseInt(slotId) },
+                include: {
+                    registrations: {
+                        where: { date: date }
+                    }
+                }
+            })
+
+            if (!slot) throw new Error('Slot waktu tidak ditemukan')
+            if (slot.registrations.length >= slot.maxQuota) {
+                throw new Error('Kuota untuk slot waktu ini sudah penuh')
+            }
+
+            // 2. Get current count for this merchant and date for ticket numbering
             const count = await tx.registration.count({
                 where: {
                     merchantId: parseInt(merchantId),
@@ -96,26 +143,22 @@ app.post('/api/register', async (req, res) => {
             const rawNumber = count + 1
             const formattedNumber = `A-${rawNumber.toString().padStart(3, '0')}`
 
-            // Calculate estimated time (Start at 09:00, 15 mins per person)
-            const baseMinutes = 9 * 60 + (rawNumber - 1) * 15
-            const hours = Math.floor(baseMinutes / 60)
-            const minutes = baseMinutes % 60
-            const timeSlot = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
-
-            // 2. Create the registration
+            // 3. Create the registration
             const registration = await tx.registration.create({
                 data: {
                     name,
                     email,
                     phone,
                     merchantId: parseInt(merchantId),
+                    slotId: parseInt(slotId),
                     date,
                     queueNumber: formattedNumber,
                     rawNumber,
-                    timeSlot,
+                    timeSlot: `${slot.startTime} - ${slot.endTime}`,
                 },
                 include: {
-                    merchant: true
+                    merchant: true,
+                    slot: true
                 }
             })
 
@@ -125,7 +168,7 @@ app.post('/api/register', async (req, res) => {
         res.status(201).json(result)
     } catch (error) {
         console.error('Registration error:', error)
-        res.status(500).json({ error: 'Gagal melakukan pendaftaran. Silakan coba lagi.' })
+        res.status(500).json({ error: error.message || 'Gagal melakukan pendaftaran. Silakan coba lagi.' })
     }
 })
 
@@ -258,6 +301,17 @@ app.get('/api/seed', async (req, res) => {
         'Sampit'
     ]
 
+    const defaultSlots = [
+        { start: '09:00', end: '09:30' },
+        { start: '09:30', end: '10:00' },
+        { start: '10:00', end: '10:30' },
+        { start: '10:30', end: '11:00' },
+        { start: '11:00', end: '11:30' },
+        { start: '13:00', end: '13:30' },
+        { start: '13:30', end: '14:00' },
+        { start: '14:00', end: '14:30' },
+    ]
+
     try {
         // 1. Seed Merchants
         const createdMerchants = []
@@ -268,13 +322,33 @@ app.get('/api/seed', async (req, res) => {
                 create: { name }
             })
             createdMerchants.push(m)
+
+            // 2. Seed TimeSlots for each merchant
+            for (const slot of defaultSlots) {
+                await prisma.timeSlot.upsert({
+                    where: {
+                        merchantId_startTime_endTime: {
+                            merchantId: m.id,
+                            startTime: slot.start,
+                            endTime: slot.end
+                        }
+                    },
+                    update: {},
+                    create: {
+                        merchantId: m.id,
+                        startTime: slot.start,
+                        endTime: slot.end,
+                        maxQuota: 5 // Default quota per slot
+                    }
+                })
+            }
         }
 
-        // 2. Seed Default Super Admin
+        // 3. Seed Default Super Admin
         const hashedPassword = await bcrypt.hash('admin123', 10)
         const admin = await prisma.admin.upsert({
             where: { username: 'admin' },
-            update: { role: 'SUPER_ADMIN' }, // Ensure existing admin becomes super
+            update: { role: 'SUPER_ADMIN' },
             create: {
                 username: 'admin',
                 password: hashedPassword,
@@ -283,9 +357,9 @@ app.get('/api/seed', async (req, res) => {
         })
 
         res.json({
-            message: 'Seeding successful',
-            merchants: createdMerchants,
-            admin: { username: admin.username, note: 'Default password is admin123' }
+            message: 'Seeding successful with slots',
+            merchants: createdMerchants.length,
+            admin: { username: admin.username }
         })
     } catch (error) {
         res.status(500).json({ error: error.message })

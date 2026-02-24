@@ -36,6 +36,7 @@ function App() {
         body: JSON.stringify({
           ...userData,
           merchantId: data.location.id,
+          slotId: data.slot.id,
           date: data.date
         }),
       })

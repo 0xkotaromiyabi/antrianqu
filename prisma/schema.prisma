@@ -17,21 +17,36 @@ model Merchant {
   id            Int            @id @default(autoincrement())
   name          String         @unique
   registrations Registration[]
+  timeSlots     TimeSlot[]
+}
+
+model TimeSlot {
+  id            Int            @id @default(autoincrement())
+  startTime     String // Format: HH:mm
+  endTime       String // Format: HH:mm
+  maxQuota      Int            @default(10)
+  merchantId    Int
+  merchant      Merchant       @relation(fields: [merchantId], references: [id])
+  registrations Registration[]
+
+  @@unique([merchantId, startTime, endTime])
 }
 
 model Registration {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   name        String
   email       String
   phone       String
   merchantId  Int
-  merchant    Merchant @relation(fields: [merchantId], references: [id])
+  merchant    Merchant  @relation(fields: [merchantId], references: [id])
+  slotId      Int?
+  slot        TimeSlot? @relation(fields: [slotId], references: [id])
   date        String // Format: YYYY-MM-DD
   queueNumber String // Format: A-001
   rawNumber   Int // Sequential number per merchant/date
-  timeSlot    String
-  status      String   @default("waiting") // waiting, arrived, cancelled
-  createdAt   DateTime @default(now())
+  timeSlot    String // Legacy field, keeping for compatibility during migration
+  status      String    @default("waiting") // waiting, arrived, cancelled
+  createdAt   DateTime  @default(now())
 
   @@index([merchantId, date])
 }
