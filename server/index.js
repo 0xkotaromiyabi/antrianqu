@@ -4,6 +4,8 @@ import { PrismaClient } from '@prisma/client'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import { createServer } from 'http'
+import { Server } from 'socket.io'
 
 dotenv.config()
 
@@ -11,6 +13,13 @@ dotenv.config()
 const prisma = globalThis.prisma || new PrismaClient()
 if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
 const app = express()
+const httpServer = createServer(app)
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+})
 
 // In-memory bot state for real-time monitoring (Ticket War Console)
 let botState = {
@@ -21,8 +30,25 @@ let botState = {
     lastUpdate: null,
     isTargetLive: false,
     activeTasks: [],
-    logs: []
+    logs: [],
+    analytics: {
+        startTime: null,
+        endTime: null,
+        totalAttempts: 0,
+        avgLatency: 0,
+        bestProxy: null,
+        failures: 0
+    }
 }
+
+io.on('connection', (socket) => {
+    console.log('Admin/Bot connected to Socket.io')
+    socket.emit('bot-status', botState)
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected')
+    })
+})
 
 app.use(cors())
 app.use(express.json())
@@ -37,7 +63,10 @@ const authenticateToken = (req, res, next) => {
     if (!token) return res.status(401).json({ error: 'Akses ditolak. Token tidak ditemukan.' })
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Token tidak valid.' })
+        if (err) {
+            console.error('[AUTH] Token verification failed:', err.message)
+            return res.status(403).json({ error: 'Token tidak valid.' })
+        }
         req.user = user
         next()
     })
@@ -389,6 +418,15 @@ app.get('/api/bot/status', async (req, res) => {
 app.post('/api/bot/update', async (req, res) => {
     const data = req.body
 
+    // Track analytics if war is active
+    if (!botState.analytics.startTime && data.jobCounter > 0) {
+        botState.analytics.startTime = new Date().toISOString()
+    }
+
+    if (data.isTargetLive && !botState.analytics.endTime) {
+        botState.analytics.endTime = new Date().toISOString()
+    }
+
     botState = {
         ...botState,
         ...data,
@@ -403,12 +441,15 @@ app.post('/api/bot/update', async (req, res) => {
         ].slice(0, 50)
     }
 
+    // Broadcast update via socket
+    io.emit('bot-status', botState)
+
     res.json({ success: true })
 })
 
 const PORT = process.env.PORT || 5000
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`)
     })
 }

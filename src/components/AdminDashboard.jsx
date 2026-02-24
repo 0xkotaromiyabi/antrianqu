@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { io } from 'socket.io-client'
 import {
     Users,
     Calendar,
@@ -38,7 +39,15 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
         browserState: 'Disconnected',
         lastUpdate: null,
         isTargetLive: false,
-        logs: []
+        logs: [],
+        analytics: {
+            startTime: null,
+            endTime: null,
+            totalAttempts: 0,
+            avgLatency: 0,
+            bestProxy: null,
+            failures: 0
+        }
     })
 
     const fetchMerchants = async () => {
@@ -46,6 +55,11 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
             const res = await fetch('/api/merchants', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
+            if (res.status === 401 || res.status === 403) {
+                console.warn('Session expired or unauthorized. Logging out.');
+                onLogout();
+                return;
+            }
             const data = await res.json()
             setMerchants(data)
         } catch (error) {
@@ -58,8 +72,17 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
             const res = await fetch('/api/registrations', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
+            if (res.status === 401 || res.status === 403) {
+                onLogout();
+                return;
+            }
             const data = await res.json()
-            setRegistrations(data)
+            if (Array.isArray(data)) {
+                setRegistrations(data)
+            } else {
+                console.error('Expected array for registrations, got:', data)
+                setRegistrations([])
+            }
         } catch (error) {
             console.error('Error fetching registrations:', error)
         }
@@ -75,9 +98,13 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
         }
         init()
 
-        // Real-time Bot Status Polling
-        const botInterval = setInterval(fetchBotStatus, 3000)
-        return () => clearInterval(botInterval)
+        // Real-time WebSocket Status
+        const socket = io('http://localhost:5000')
+        socket.on('bot-status', (data) => {
+            setBotData(data)
+        })
+
+        return () => socket.disconnect()
     }, [role])
 
     const fetchBotStatus = async () => {
@@ -95,8 +122,17 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
             const res = await fetch('/api/admins', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
+            if (res.status === 401 || res.status === 403) {
+                onLogout();
+                return;
+            }
             const data = await res.json()
-            setAllAdmins(data)
+            if (Array.isArray(data)) {
+                setAllAdmins(data)
+            } else {
+                console.error('Expected array for admins, got:', data)
+                setAllAdmins([])
+            }
         } catch (error) {
             console.error('Error fetching admins:', error)
         }
@@ -198,7 +234,7 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
                             <Zap size={14} color="var(--primary-color)" />
                         </div>
                         <p style={{ fontSize: '32px', fontWeight: '900', color: '#fff' }}>{botData.jobCounter}</p>
-                        <p style={{ fontSize: '10px', color: '#22c55e' }}>Polling active (3s)</p>
+                        <p style={{ fontSize: '10px', color: '#22c55e' }}>Real-time Link Active</p>
                     </div>
                     <div className="erp-card" style={{ borderLeft: '4px solid #3b82f6' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -225,6 +261,25 @@ const AdminDashboard = ({ onBack, token, role, onLogout }) => {
                             {botData.isTargetLive ? 'FORM LIVE' : 'WAITING...'}
                         </p>
                         <p style={{ fontSize: '10px', color: 'var(--text-color)' }}>Scan logic: #name</p>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+                    <div className="erp-card" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.1)' }}>
+                        <h4 style={{ fontSize: '10px', color: '#10b981', fontWeight: '800' }}>START TIME</h4>
+                        <p style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>{botData.analytics.startTime ? new Date(botData.analytics.startTime).toLocaleTimeString() : '-'}</p>
+                    </div>
+                    <div className="erp-card" style={{ background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.1)' }}>
+                        <h4 style={{ fontSize: '10px', color: '#3b82f6', fontWeight: '800' }}>END TIME</h4>
+                        <p style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>{botData.analytics.endTime ? new Date(botData.analytics.endTime).toLocaleTimeString() : '-'}</p>
+                    </div>
+                    <div className="erp-card" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.1)' }}>
+                        <h4 style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '800' }}>DURATION</h4>
+                        <p style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>
+                            {botData.analytics.startTime && botData.analytics.endTime
+                                ? `${Math.floor((new Date(botData.analytics.endTime) - new Date(botData.analytics.startTime)) / 1000)}s`
+                                : '-'}
+                        </p>
                     </div>
                 </div>
 
