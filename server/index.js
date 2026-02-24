@@ -249,7 +249,13 @@ app.get('/api/seed', async (req, res) => {
         'Boutique Senopati',
         'Merchant Kemang',
         'Store Menteng',
-        'Flagship PIK'
+        'Flagship PIK',
+        'Balikpapan',
+        'Makassar',
+        'Kendari',
+        'Manado',
+        'Palu',
+        'Sampit'
     ]
 
     try {
